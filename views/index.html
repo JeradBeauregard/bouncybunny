@@ -1,13 +1,269 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boucy Bunny</title>
-    <link rel="stylesheet" href="../public/styles.css">
-    <script type="module" src="../public/main2.js"></script>
+  <meta charset="UTF-8" />
+  <title>Bunny Fireworks!</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #counter {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      z-index: 100;
+      user-select: none;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-    
+  <div id="counter">Hits: 0</div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { GLTFLoader } from 'https://esm.sh/three/examples/jsm/loaders/GLTFLoader.js';
+
+    const scene = new THREE.Scene();
+    let bgColor = new THREE.Color(0xf0f0ff);
+    scene.background = bgColor.clone();
+    scene.fog = new THREE.Fog(bgColor.clone(), 10, 40);
+
+    const frustumSize = 20;
+    let aspect = window.innerWidth / window.innerHeight;
+    const camera = new THREE.OrthographicCamera(
+      (-frustumSize * aspect) / 2,
+      (frustumSize * aspect) / 2,
+      frustumSize / 2,
+      -frustumSize / 2,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 0, 10);
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
+    scene.add(light);
+
+    const trailGroup = new THREE.Group();
+    scene.add(trailGroup);
+
+    let model;
+    const loader = new GLTFLoader();
+    loader.load('../public/models/bunny-model.glb', (gltf) => {
+      model = gltf.scene;
+
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      const screenWidth = window.innerWidth;
+      const worldWidth = camera.right - camera.left;
+      const targetWidth = (15 / screenWidth) * worldWidth;
+      const scale = targetWidth / size.x;
+
+      model.scale.setScalar(scale);
+      model.position.set(0, 0, 0);
+      model.position.sub(center.multiplyScalar(scale));
+
+      model.rotation.y = -Math.PI / 2;
+      scene.add(model);
+    });
+
+    const velocity = new THREE.Vector3();
+    const rotationVelocity = new THREE.Vector3();
+    let isFalling = false;
+    let velocityActive = false;
+    let isSpinning = false;
+
+    const particles = [];
+    const particleGeometry = new THREE.SphereGeometry(0.1, 6, 6);
+
+    function createAttachedExplosion(source) {
+      for (let i = 0; i < 30; i++) {
+        const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+        const material = new THREE.MeshBasicMaterial({ color: color, transparent: true });
+        const particle = new THREE.Mesh(particleGeometry, material);
+        particle.position.copy(source.position);
+        const dir = new THREE.Vector3(
+          (Math.random() - 0.5) * 4,
+          (Math.random() - 0.5) * 4,
+          (Math.random() - 0.5) * 4
+        ).normalize().multiplyScalar(0.5 + Math.random() * 0.5);
+        particle.userData.velocity = dir;
+        particle.userData.life = 1.5;
+        particle.userData.follow = source;
+        scene.add(particle);
+        particles.push(particle);
+      }
+    }
+
+    function leaveTrail() {
+      if (!model) return;
+      const trail = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 4, 4),
+        new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 })
+      );
+      trail.position.copy(model.position);
+      trailGroup.add(trail);
+      setTimeout(() => trailGroup.remove(trail), 300);
+    }
+
+    const modelSize = 0.5;
+    const buffer = 1.5;
+    let boundaries = {};
+
+    function updateBoundaries() {
+      boundaries = {
+        left: camera.left + modelSize + buffer,
+        right: camera.right - modelSize - buffer,
+        top: camera.top - modelSize - buffer,
+        bottom: camera.bottom + modelSize + buffer,
+      };
+    }
+    updateBoundaries();
+
+    window.addEventListener('resize', () => {
+      aspect = window.innerWidth / window.innerHeight;
+      camera.left = (-frustumSize * aspect) / 2;
+      camera.right = (frustumSize * aspect) / 2;
+      camera.top = frustumSize / 2;
+      camera.bottom = -frustumSize / 2;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateBoundaries();
+    });
+
+    function animateParticles(delta) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        if (p.userData.follow && p.userData.life > 1.2) {
+          p.position.copy(p.userData.follow.position);
+        } else {
+          p.position.add(p.userData.velocity.clone().multiplyScalar(delta));
+        }
+
+        p.userData.life -= delta;
+        p.material.opacity = Math.max(0, p.userData.life);
+
+        if (p.userData.life <= 0) {
+          scene.remove(p);
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    let lastTime = performance.now();
+
+    function animate() {
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (model) {
+        if (isSpinning) {
+          model.rotation.x += rotationVelocity.x;
+          model.rotation.y += rotationVelocity.y;
+          model.rotation.z += rotationVelocity.z;
+        }
+
+        if (velocityActive && !isFalling) {
+          model.position.add(velocity);
+          leaveTrail();
+        }
+
+        if (isFalling) {
+          model.position.y -= 0.15 + Math.random() * 0.1;
+          model.position.x += (Math.random() - 0.5) * 0.2;
+          model.position.z += (Math.random() - 0.5) * 0.1;
+          leaveTrail();
+
+          if (model.position.y <= boundaries.bottom) {
+            model.position.y = boundaries.bottom;
+            isFalling = false;
+            isSpinning = false;
+            createAttachedExplosion(model);
+          }
+        }
+
+        model.position.x = Math.max(boundaries.left, Math.min(boundaries.right, model.position.x));
+        model.position.y = Math.max(boundaries.bottom, Math.min(boundaries.top, model.position.y));
+      }
+
+      
+
+      animateParticles(delta);
+      renderer.render(scene, camera);
+    }
+
+    renderer.setAnimationLoop(animate);
+
+    function getEdgeAwareDirection() {
+      const edgeBuffer = 1.5;
+      const pos = model.position.clone();
+      const dir = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), 0);
+
+      if (pos.x < boundaries.left + edgeBuffer) dir.x = Math.abs(dir.x);
+      else if (pos.x > boundaries.right - edgeBuffer) dir.x = -Math.abs(dir.x);
+
+      if (pos.y < boundaries.bottom + edgeBuffer) dir.y = Math.abs(dir.y);
+      else if (pos.y > boundaries.top - edgeBuffer) dir.y = -Math.abs(dir.y);
+
+      return dir.normalize();
+    }
+
+    let hitCount = 0;
+    const counterEl = document.getElementById('counter');
+
+    function updateCounter() {
+      counterEl.textContent = `Hits: ${hitCount}`;
+    }
+
+    document.addEventListener('click', () => {
+      if (!model) return;
+
+      hitCount++;
+      updateCounter();
+
+      // make bg redder on hit
+      scene.background.lerp(new THREE.Color(0xff0000), 0.05);
+      scene.fog.color.lerp(new THREE.Color(0xff0000), 0.05);
+
+      const direction = getEdgeAwareDirection();
+      velocity.copy(direction).multiplyScalar(2.5);
+      velocityActive = true;
+
+      rotationVelocity.set(
+        (Math.random() - 0.5) * 0.4,
+        (Math.random() - 0.5) * 0.4,
+        (Math.random() - 0.5) * 0.4
+      );
+      isSpinning = true;
+
+      createAttachedExplosion(model);
+
+      setTimeout(() => {
+        velocityActive = false;
+        isFalling = true;
+      }, 500);
+    });
+  </script>
 </body>
 </html>

@@ -1,5 +1,7 @@
 // Import three js
-import * as THREE from 'three';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@latest/build/three.module.js';
+// loader for model
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
 
 
@@ -35,11 +37,36 @@ const backgroundTexture = textureLoader.load('../imgs/station.jpg'); // Replace 
 // scene.background = backgroundTexture;
 scene.background = new THREE.Color(0xffffff); // Light forest green
 
-// Import box geometry
+/* Import box geometry
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
 const cube = new THREE.Mesh(geometry, material);
+cube.position.set(0, 0, 0.1); // Slightly forward in Z
+
 scene.add(cube);
+
+*/
+
+// Import Model
+
+let model;
+const loader = new GLTFLoader();
+
+loader.load(
+  './models/bunny-model.glb',
+  (gltf) => {
+    model = gltf.scene;
+    model.scale.set(1, 1, 1); // Adjust size if needed
+    model.position.set(0, 0, 0.1); // Match cube position
+    scene.add(model);
+    scene.remove(cube); // Remove cube if you don’t want both
+  },
+  undefined,
+  (error) => {
+    console.error('Error loading GLTF model:', error);
+  }
+);
+
 
 // Velocity vector for the cube
 const velocity = new THREE.Vector3(0, 0, 0);
