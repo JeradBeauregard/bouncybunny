@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Bunny Fireworks!</title>
+  <title>Bunny Boom Test</title>
   <style>
     body {
       margin: 0;
@@ -14,14 +14,14 @@
     }
     #counter {
       position: absolute;
-      bottom: 12px;
-      right: 12px;
+      bottom: 10px;
+      right: 10px;
       background: rgba(0, 0, 0, 0.5);
       color: white;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 13px;
-      z-index: 100;
+      padding: 4px 7px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 99;
       user-select: none;
       pointer-events: none;
     }
@@ -34,126 +34,131 @@
     import { GLTFLoader } from 'https://esm.sh/three/examples/jsm/loaders/GLTFLoader.js';
 
     const scene = new THREE.Scene();
-    let bgColor = new THREE.Color(0xf0f0ff);
-    scene.background = bgColor.clone();
-    scene.fog = new THREE.Fog(bgColor.clone(), 10, 40);
+    let bggColor = new THREE.Color(0xfafaff); // kinda soft color
+    scene.background = bggColor.clone();
+    scene.fog = new THREE.Fog(bggColor.clone(), 8, 42);
 
-    const frustumSize = 20;
-    let aspect = window.innerWidth / window.innerHeight;
-    const camera = new THREE.OrthographicCamera(
-      (-frustumSize * aspect) / 2,
-      (frustumSize * aspect) / 2,
-      frustumSize / 2,
-      -frustumSize / 2,
+    const zoom = 20;
+    let whRatio = window.innerWidth / window.innerHeight;
+
+    const cam = new THREE.OrthographicCamera(
+      (-zoom * whRatio) / 2,
+      (zoom * whRatio) / 2,
+      zoom / 2,
+      -zoom / 2,
       0.1,
-      1000
+      999
     );
-    camera.position.set(0, 0, 10);
-    camera.zoom = 1;
-    camera.updateProjectionMatrix();
+    cam.position.set(0, 0, 10);
+    cam.zoom = 1;
+    cam.updateProjectionMatrix();
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const rendr = new THREE.WebGLRenderer({ antialias: true });
+    rendr.setPixelRatio(window.devicePixelRatio);
+    rendr.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(rendr.domElement);
 
-    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-    scene.add(light);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x333333, 1.4);
+    scene.add(hemiLight);
 
-    const trailGroup = new THREE.Group();
-    scene.add(trailGroup);
+    const trailz = new THREE.Group();
+    scene.add(trailz);
 
-    let model;
-    const loader = new GLTFLoader();
-    loader.load('../public/models/bunny-model.glb', (gltf) => {
-      model = gltf.scene;
+    let bunnyGuy;
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load('../public/models/bunny-model.glb', (gltf) => {
+      bunnyGuy = gltf.scene;
 
-      const box = new THREE.Box3().setFromObject(model);
+      const b = new THREE.Box3().setFromObject(bunnyGuy);
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
-      box.getSize(size);
-      box.getCenter(center);
+      b.getSize(size);
+      b.getCenter(center);
 
-      const screenWidth = window.innerWidth;
-      const worldWidth = camera.right - camera.left;
-      const targetWidth = (15 / screenWidth) * worldWidth;
-      const scale = targetWidth / size.x;
+      const scrW = window.innerWidth;
+      const sceneW = cam.right - cam.left;
+      const wantedW = (15 / scrW) * sceneW;
+      const scl = wantedW / size.x;
 
-      model.scale.setScalar(scale);
-      model.position.set(0, 0, 0);
-      model.position.sub(center.multiplyScalar(scale));
+      bunnyGuy.scale.setScalar(scl);
+      bunnyGuy.position.set(0, 0, 0);
+      bunnyGuy.position.sub(center.multiplyScalar(scl));
+      bunnyGuy.rotation.y = -Math.PI / 2;
 
-      model.rotation.y = -Math.PI / 2;
-      scene.add(model);
+      scene.add(bunnyGuy);
     });
 
-    const velocity = new THREE.Vector3();
-    const rotationVelocity = new THREE.Vector3();
-    let isFalling = false;
-    let velocityActive = false;
-    let isSpinning = false;
+    const velo = new THREE.Vector3();
+    const rotVel = new THREE.Vector3();
+    let fallin = false;
+    let goFast = false;
+    let spinSpin = false;
 
-    const particles = [];
-    const particleGeometry = new THREE.SphereGeometry(0.1, 6, 6);
+    const boomz = [];
+    const puffGeo = new THREE.SphereGeometry(0.1, 6, 6);
 
-    function createAttachedExplosion(source) {
-      for (let i = 0; i < 30; i++) {
-        const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
-        const material = new THREE.MeshBasicMaterial({ color: color, transparent: true });
-        const particle = new THREE.Mesh(particleGeometry, material);
-        particle.position.copy(source.position);
+    function makeBoom(origin) {
+      for (let i = 0; i < 28; i++) {
+        const clr = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+        const mat = new THREE.MeshBasicMaterial({ color: clr, transparent: true });
+        const puff = new THREE.Mesh(puffGeo, mat);
+        puff.position.copy(origin.position);
+
         const dir = new THREE.Vector3(
           (Math.random() - 0.5) * 4,
           (Math.random() - 0.5) * 4,
           (Math.random() - 0.5) * 4
-        ).normalize().multiplyScalar(0.5 + Math.random() * 0.5);
-        particle.userData.velocity = dir;
-        particle.userData.life = 1.5;
-        particle.userData.follow = source;
-        scene.add(particle);
-        particles.push(particle);
+        ).normalize().multiplyScalar(0.5 + Math.random());
+
+        puff.userData.velocity = dir;
+        puff.userData.life = 1.4;
+        puff.userData.follow = origin;
+
+        scene.add(puff);
+        boomz.push(puff);
       }
     }
 
-    function leaveTrail() {
-      if (!model) return;
-      const trail = new THREE.Mesh(
+    function dropTrail() {
+      if (!bunnyGuy) return;
+      const tr = new THREE.Mesh(
         new THREE.SphereGeometry(0.05, 4, 4),
-        new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 })
+        new THREE.MeshBasicMaterial({ color: 0xff66ff, transparent: true, opacity: 0.35 })
       );
-      trail.position.copy(model.position);
-      trailGroup.add(trail);
-      setTimeout(() => trailGroup.remove(trail), 300);
+      tr.position.copy(bunnyGuy.position);
+      trailz.add(tr);
+      setTimeout(() => trailz.remove(tr), 280);
     }
 
-    const modelSize = 0.5;
-    const buffer = 1.5;
-    let boundaries = {};
+    const bunnySize = 0.5;
+    const buf = 1.3;
+    let edgeStops = {};
 
-    function updateBoundaries() {
-      boundaries = {
-        left: camera.left + modelSize + buffer,
-        right: camera.right - modelSize - buffer,
-        top: camera.top - modelSize - buffer,
-        bottom: camera.bottom + modelSize + buffer,
+    function calcEdges() {
+      edgeStops = {
+        left: cam.left + bunnySize + buf,
+        right: cam.right - bunnySize - buf,
+        top: cam.top - bunnySize - buf,
+        bottom: cam.bottom + bunnySize + buf,
       };
     }
-    updateBoundaries();
+
+    calcEdges();
 
     window.addEventListener('resize', () => {
-      aspect = window.innerWidth / window.innerHeight;
-      camera.left = (-frustumSize * aspect) / 2;
-      camera.right = (frustumSize * aspect) / 2;
-      camera.top = frustumSize / 2;
-      camera.bottom = -frustumSize / 2;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      updateBoundaries();
+      whRatio = window.innerWidth / window.innerHeight;
+      cam.left = (-zoom * whRatio) / 2;
+      cam.right = (zoom * whRatio) / 2;
+      cam.top = zoom / 2;
+      cam.bottom = -zoom / 2;
+      cam.updateProjectionMatrix();
+      rendr.setSize(window.innerWidth, window.innerHeight);
+      calcEdges();
     });
 
-    function animateParticles(delta) {
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+    function moveBoomz(delta) {
+      for (let i = boomz.length - 1; i >= 0; i--) {
+        const p = boomz[i];
         if (p.userData.follow && p.userData.life > 1.2) {
           p.position.copy(p.userData.follow.position);
         } else {
@@ -165,103 +170,100 @@
 
         if (p.userData.life <= 0) {
           scene.remove(p);
-          particles.splice(i, 1);
+          boomz.splice(i, 1);
         }
       }
     }
 
-    let lastTime = performance.now();
+    let prevTime = performance.now();
 
-    function animate() {
+    function bunnyTrail() {
       const now = performance.now();
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+      const delta = (now - prevTime) / 1000;
+      prevTime = now;
 
-      if (model) {
-        if (isSpinning) {
-          model.rotation.x += rotationVelocity.x;
-          model.rotation.y += rotationVelocity.y;
-          model.rotation.z += rotationVelocity.z;
+      if (bunnyGuy) {
+        if (spinSpin) {
+          bunnyGuy.rotation.x += rotVel.x;
+          bunnyGuy.rotation.y += rotVel.y;
+          bunnyGuy.rotation.z += rotVel.z;
         }
 
-        if (velocityActive && !isFalling) {
-          model.position.add(velocity);
-          leaveTrail();
+        if (goFast && !fallin) {
+          bunnyGuy.position.add(velo);
+          dropTrail();
         }
 
-        if (isFalling) {
-          model.position.y -= 0.15 + Math.random() * 0.1;
-          model.position.x += (Math.random() - 0.5) * 0.2;
-          model.position.z += (Math.random() - 0.5) * 0.1;
-          leaveTrail();
+        if (fallin) {
+          bunnyGuy.position.y -= 0.14 + Math.random() * 0.12;
+          bunnyGuy.position.x += (Math.random() - 0.5) * 0.25;
+          bunnyGuy.position.z += (Math.random() - 0.5) * 0.15;
+          dropTrail();
 
-          if (model.position.y <= boundaries.bottom) {
-            model.position.y = boundaries.bottom;
-            isFalling = false;
-            isSpinning = false;
-            createAttachedExplosion(model);
+          if (bunnyGuy.position.y <= edgeStops.bottom) {
+            bunnyGuy.position.y = edgeStops.bottom;
+            fallin = false;
+            spinSpin = false;
+            makeBoom(bunnyGuy);
           }
         }
 
-        model.position.x = Math.max(boundaries.left, Math.min(boundaries.right, model.position.x));
-        model.position.y = Math.max(boundaries.bottom, Math.min(boundaries.top, model.position.y));
+        bunnyGuy.position.x = Math.max(edgeStops.left, Math.min(edgeStops.right, bunnyGuy.position.x));
+        bunnyGuy.position.y = Math.max(edgeStops.bottom, Math.min(edgeStops.top, bunnyGuy.position.y));
       }
 
-      
-
-      animateParticles(delta);
-      renderer.render(scene, camera);
+      moveBoomz(delta);
+      rendr.render(scene, cam);
     }
 
-    renderer.setAnimationLoop(animate);
+    rendr.setAnimationLoop(bunnyTrail);
 
-    function getEdgeAwareDirection() {
-      const edgeBuffer = 1.5;
-      const pos = model.position.clone();
+    function getSafeDir() {
+      const margin = 1.4;
+      const pos = bunnyGuy.position.clone();
       const dir = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), 0);
 
-      if (pos.x < boundaries.left + edgeBuffer) dir.x = Math.abs(dir.x);
-      else if (pos.x > boundaries.right - edgeBuffer) dir.x = -Math.abs(dir.x);
+      if (pos.x < edgeStops.left + margin) dir.x = Math.abs(dir.x);
+      else if (pos.x > edgeStops.right - margin) dir.x = -Math.abs(dir.x);
 
-      if (pos.y < boundaries.bottom + edgeBuffer) dir.y = Math.abs(dir.y);
-      else if (pos.y > boundaries.top - edgeBuffer) dir.y = -Math.abs(dir.y);
+      if (pos.y < edgeStops.bottom + margin) dir.y = Math.abs(dir.y);
+      else if (pos.y > edgeStops.top - margin) dir.y = -Math.abs(dir.y);
 
       return dir.normalize();
     }
 
-    let hitCount = 0;
-    const counterEl = document.getElementById('counter');
+    let hitz = 0;
+    const hitCounter = document.getElementById('counter');
 
-    function updateCounter() {
-      counterEl.textContent = `Hits: ${hitCount}`;
+    function showHits() {
+      hitCounter.textContent = `Hits: ${hitz}`;
     }
 
     document.addEventListener('click', () => {
-      if (!model) return;
+      if (!bunnyGuy) return;
 
-      hitCount++;
-      updateCounter();
+      hitz++;
+      showHits();
 
-      // make bg redder on hit
-      scene.background.lerp(new THREE.Color(0xff0000), 0.05);
-      scene.fog.color.lerp(new THREE.Color(0xff0000), 0.05);
+      scene.background.lerp(new THREE.Color(0xff3333), 0.06);
+      scene.fog.color.lerp(new THREE.Color(0xff3333), 0.06);
 
-      const direction = getEdgeAwareDirection();
-      velocity.copy(direction).multiplyScalar(2.5);
-      velocityActive = true;
+      const newDir = getSafeDir();
+      velo.copy(newDir).multiplyScalar(2.6);
+      goFast = true;
 
-      rotationVelocity.set(
-        (Math.random() - 0.5) * 0.4,
-        (Math.random() - 0.5) * 0.4,
-        (Math.random() - 0.5) * 0.4
+      rotVel.set(
+        (Math.random() - 0.5) * 0.42,
+        (Math.random() - 0.5) * 0.42,
+        (Math.random() - 0.5) * 0.42
       );
-      isSpinning = true;
 
-      createAttachedExplosion(model);
+      spinSpin = true;
+      makeBoom(bunnyGuy);
 
       setTimeout(() => {
-        velocityActive = false;
-        isFalling = true;
+        goFast = false;
+        fallin = true;
       }, 500);
     });
   </script>
